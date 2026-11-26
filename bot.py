@@ -36,7 +36,12 @@ SOURCES = [
     "https://githubusercontent.com",
     "https://githubusercontent.com",
     "https://githubusercontent.com",
+    "https://githubusercontent.com",
+    "https://githubusercontent.com",
+    "https://githubusercontent.com",
+    "https://githubusercontent.com",
 ]
+
 
 RU_BYPASS_DOMAINS = [
     "yandex.ru",
@@ -156,10 +161,13 @@ def analyze_server(link):
 
 
 def fetch_servers_sync():
+    """Собирает до 100 актуальных VLESS-серверов из 7 источников."""
     raw_links = []
     for url in SOURCES:
         try:
-            resp = requests.get(url, timeout=5)
+            resp = requests.get(url, timeout=8)
+            if resp.status_code != 200:
+                continue
             text = resp.text.strip()
             if not text.startswith("vless://"):
                 try:
@@ -170,43 +178,46 @@ def fetch_servers_sync():
         except Exception:
             continue
 
-    unique_links = list(set(raw_links))[:150]
+    unique_links = list(set(raw_links))
     found = []
 
     for link in unique_links:
         try:
+            # Берем только современные VLESS с TLS или Reality (работают везде)
             if "security=tls" not in link and "security=reality" not in link:
                 continue
             parsed = urlparse(link)
             host = parsed.hostname
-            port = parsed.port or 443
-            ping = check_tcp_ping(host, port)
+            if not host:
+                continue
 
-            if ping and ping < 200:
-                is_wl, is_voice = analyze_server(link)
-                base_part, _, frag = link.partition("#")
-                raw_name = unquote(frag) if frag else host
+            is_wl, is_voice = analyze_server(link)
+            base_part, _, frag = link.partition("#")
+            raw_name = unquote(frag) if frag else host
 
-                tags = []
-                if is_wl:
-                    tags.append("WL")
-                if is_voice:
-                    tags.append("TG+DS")
-                prefix = f"🛡️[{'/'.join(tags)}] " if tags else "⚡ "
+            tags = []
+            if is_wl:
+                tags.append("WL")
+            if is_voice:
+                tags.append("TG+DS")
+            prefix = f"🛡️[{'/'.join(tags)}] " if tags else "⚡ "
 
-                clean_title = f"{prefix}{raw_name[:25]} ({ping}ms)"
-                new_link = f"{base_part}#{quote(clean_title)}"
-                found.append({
-                    "name": clean_title,
-                    "ping": ping,
-                    "link": new_link,
-                    "priority": 1 if (is_wl or is_voice) else 2,
-                })
+            clean_title = f"{prefix}{raw_name[:28]}"
+            new_link = f"{base_part}#{quote(clean_title)}"
+            found.append({
+                "name": clean_title,
+                "ping": 45,  # Реальный пинг измерит сам телефон в INCY
+                "link": new_link,
+                "priority": 1 if (is_wl or is_voice) else 2,
+            })
+            if len(found) >= 200:  # Собираем запас до 200 ключей для сортировки
+                break
         except Exception:
             continue
 
-    found.sort(key=lambda x: (x["priority"], x["ping"]))
-    return found[:20]
+    # Сортируем так, чтобы серверы с пометками [WL] и [TG+DS] были первыми
+    found.sort(key=lambda x: x["priority"])
+    return found[:100]  # Отдаем топ-100 серверов в подписку
 
 
 async def background_updater():
@@ -359,6 +370,11 @@ async def cb_get_keys(callback: types.CallbackQuery):
     if uid in db["banned"]:
         await callback.answer("⛔ Вы заблокированы!", show_alert=True)
         return
+    if not CACHED_SERVERS:
+        loop = asyncio.get_running_loop()
+        servers = await loop.run_in_executor(None, fetch_servers_sync)
+        if servers:
+            CACHED_SERVERS.extend(servers)
 
     if not CACHED_SERVERS:
         await callback.answer(
