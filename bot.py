@@ -567,6 +567,13 @@ async def handle_sub(request):
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_first_connect = False
+    # Добавьте эти 2 строчки в начало функции handle_sub перед links = [s["link"] for s in CACHED_SERVERS]:
+    if not CACHED_SERVERS:
+        CACHED_SERVERS.extend(
+            await asyncio.get_running_loop().run_in_executor(
+                None, fetch_servers_sync
+            )
+        )
 
     if uid not in db["users"]:
         db["users"][uid] = {
