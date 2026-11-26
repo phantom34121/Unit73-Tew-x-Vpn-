@@ -22,7 +22,7 @@ import requests
 # ================= НАСТРОЙКИ =================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID = 6146253635
-WEBAPP_URL = "https://github.io"
+WEBAPP_URL = "https://phantom34121.github.io/Unit73-Tew-x-Vpn-/"
 API_URL = "https://unit73-tew-x-vpn-3.onrender.com"  # сюда потом впишете вашу ссылку с Render
 DB_FILE = "users_db.json"
 PORT = int(os.environ.get("PORT", 8080))
